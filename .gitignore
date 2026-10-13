@@ -1,0 +1,15 @@
+# Test görüntüleri ve çıktılar (kişisel veri içerir, depoya yüklenmez)
+data/*
+!data/README.md
+outputs/
+
+# Model ağırlıkları (büyük dosyalar)
+*.pt
+*.onnx
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
