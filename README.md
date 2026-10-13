@@ -20,7 +20,7 @@ Sistem, verilen bir görüntüdeki insan yüzlerini ve araç plakalarını önce
 |---|---|---|
 | 1 | Ceren KILIÇ | Problem tanımı, yöntem seçimi, iş paketleri |
 | 2 | Ezgi GÖZÜTOK | Gereksinim analizi, işlem akışı, test senaryoları |
-| 3 | – | Test görüntüleri, ön işleme, model kurulumu (planlandı) |
+| 3 | Sena KILIÇOĞLU | Test görüntüleri, ön işleme, model kurulumu |
 
 Haftalık raporlar `docs/raporlar/` klasöründe.
 
