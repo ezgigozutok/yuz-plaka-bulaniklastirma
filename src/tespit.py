@@ -16,7 +16,10 @@ import sys
 import cv2
 from ultralytics import YOLO
 
-MODEL_YOLU = "yolo26m_face_plate.pt"   # asıl model dosyası bulununca güncellenecek
+MODEL_YOLU = "models/yolo26m_face_lp.pt"   # YOLO26m Face & License-Plate (raporda kaynak [7])
+
+# Modelin İngilizce sınıf adlarını ekibin ortak adlarına çevirir
+SINIF_ADLARI = {"face": "yuz", "license-plate": "plaka"}
 
 
 # İP6 - Modeli yükle
@@ -33,7 +36,7 @@ def tespit_et(model, goruntu, esik=0.25):
     for kutu in sonuc.boxes:
         x1, y1, x2, y2 = kutu.xyxy[0].tolist()
         tespitler.append({
-            "sinif": sonuc.names[int(kutu.cls[0])],
+            "sinif": SINIF_ADLARI.get(sonuc.names[int(kutu.cls[0])], sonuc.names[int(kutu.cls[0])]),
             "kutu": [int(x1), int(y1), int(x2), int(y2)],
             "guven": float(kutu.conf[0]),
         })
