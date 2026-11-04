@@ -1,3 +1,7 @@
-ultralytics
-opencv-python
+ultralytics          # YOLO26 modeli (PyTorch'u da kurar)
+opencv-python        # görüntü okuma/yazma, bulanıklaştırma
 numpy
+pillow               # veri_hazirla.py: görüntü boyutunu hızlı okuma
+huggingface_hub      # veri_indir.py: PP4AV ve WIDER FACE indirme
+matplotlib           # degerlendir.py: grafikler
+pytest               # tests/
