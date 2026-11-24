@@ -23,8 +23,10 @@ import cv2
 import numpy as np
 
 GENISLETME = 0.15      # kutuyu her yönden kutu boyunun bu oranı kadar büyüt
-CEKIRDEK_ORANI = 0.5   # Gaussian çekirdek boyu = kutunun kısa kenarı x bu oran
-PIKSEL_BLOK = 8        # pikselleştirmede kısa kenar boyunca kaç blok kalacağı
+CEKIRDEK_ORANI = 1.0   # Gaussian çekirdek boyu = kutunun her eksendeki boyu x bu oran
+                       # (6. hafta: 0.5 -> 1.0; 0.5'te bulanık yüzlerin bir kısmı model tarafından hâlâ
+                       #  yüz olarak bulunabiliyordu, bkz. docs/sonuclar/bulaniklastirma.md)
+PIKSEL_BLOK = 8        # pikselleştirmede uzun kenar boyunca kaç blok kalacağı
 
 
 def kutu_genislet(kutu, goruntu_boyutu, oran=GENISLETME):
@@ -40,19 +42,29 @@ def tek_sayi(n):
     return n if n % 2 == 1 else n + 1
 
 
-def bolge_bulaniklastir(bolge, yontem="gauss"):
+def bolge_bulaniklastir(bolge, yontem="gauss", guc=None):
+    """guc: gauss için çekirdek oranı (varsayılan CEKIRDEK_ORANI), piksel için uzun kenardaki
+    blok sayısı (varsayılan PIKSEL_BLOK).
+
+    6. hafta düzeltmesi (Ceren KILIÇ): Güç önceden bölgenin KISA kenarına göre hesaplanıyordu.
+    Yüzler kareye yakın olduğu için sorun yoktu; ama plaka geniş ve alçak bir dikdörtgen
+    (ör. 110x24 px). Kısa kenara göre seçilen çekirdek plakadaki harfleri silmeye yetmiyordu,
+    pikselleştirmede ise blok boyu 1 pikselde kalıp plaka HİÇ değişmiyordu (bkz.
+    docs/sonuclar/bulaniklastirma.md). Artık Gaussian çekirdeği her eksende o eksenin
+    uzunluğuyla, piksel blokları ise uzun kenarla orantılı."""
     h, w = bolge.shape[:2]
     if h < 2 or w < 2:
         return bolge
     if yontem == "piksel":
-        olcek = max(1, min(h, w) // PIKSEL_BLOK)
-        kucuk = cv2.resize(bolge, (max(1, w // olcek), max(1, h // olcek)), interpolation=cv2.INTER_LINEAR)
+        blok = guc or PIKSEL_BLOK
+        boyut = max(2, max(h, w) // blok)                   # bir bloğun kenarı (piksel)
+        kucuk = cv2.resize(bolge, (max(1, -(-w // boyut)), max(1, -(-h // boyut))), interpolation=cv2.INTER_AREA)
         return cv2.resize(kucuk, (w, h), interpolation=cv2.INTER_NEAREST)
-    k = tek_sayi(min(h, w) * CEKIRDEK_ORANI)
-    return cv2.GaussianBlur(bolge, (k, k), 0)
+    oran = guc or CEKIRDEK_ORANI
+    return cv2.GaussianBlur(bolge, (tek_sayi(w * oran), tek_sayi(h * oran)), 0)
 
 
-def anonimlestir(goruntu, tespitler, yontem="gauss", genisletme=GENISLETME):
+def anonimlestir(goruntu, tespitler, yontem="gauss", genisletme=GENISLETME, guc=None):
     """Tespit edilen her bölgeyi bulanıklaştırır; görüntünün geri kalanına dokunmaz."""
     cikti = goruntu.copy()
     Y, G = goruntu.shape[:2]
@@ -60,7 +72,7 @@ def anonimlestir(goruntu, tespitler, yontem="gauss", genisletme=GENISLETME):
         x1, y1, x2, y2 = kutu_genislet(t["kutu"], (G, Y), genisletme)
         if x2 - x1 < 2 or y2 - y1 < 2:
             continue
-        cikti[y1:y2, x1:x2] = bolge_bulaniklastir(cikti[y1:y2, x1:x2], yontem)
+        cikti[y1:y2, x1:x2] = bolge_bulaniklastir(cikti[y1:y2, x1:x2], yontem, guc)
     return cikti
 
 

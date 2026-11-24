@@ -8,6 +8,10 @@ Görüntü oku -> yüz ve plakaları tespit et -> sınıf bazlı eşik uygula ->
     python src/anonimlestir.py klasor/ --mod parcali --yontem piksel
     python src/anonimlestir.py foto.jpg --kutular      # yanına tespit kutulu hâlini de kaydeder
 
+Varsayılan tespit ayarı (6. hafta): görüntünün tamamı 1280 px girişle (tam mod). Küçük yüz
+denemesinde yüz recall'u 0,688'den 0,768'e çıkardı (bkz. docs/sonuclar/kucuk_yuz.md).
+5. haftanın ayarı için:  --mod parcali --imgsz 640
+
 Eşikler: degerlendir.py çalıştırıldıysa docs/sonuclar/esikler.json'daki seçilen eşikler,
 çalıştırılmadıysa model kartındaki eşikler (yüz 0.222, plaka 0.263) kullanılır.
 
@@ -36,7 +40,8 @@ def dosyalari_bul(girdi):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("girdi", help="görüntü dosyası veya klasör")
-    ap.add_argument("--mod", choices=["tam", "parcali"], default="parcali")
+    ap.add_argument("--mod", choices=["tam", "parcali"], default="tam")
+    ap.add_argument("--imgsz", type=int, default=1280, help="modelin giriş boyutu (5. hafta: 640)")
     ap.add_argument("--yontem", choices=["gauss", "piksel"], default="gauss")
     ap.add_argument("--kutular", action="store_true", help="tespit kutularını çizilmiş hâlini de kaydet")
     ap.add_argument("--cikti", default=os.path.join(OUTPUTS, "anonim"))
@@ -47,7 +52,7 @@ if __name__ == "__main__":
     if not dosyalar:
         sys.exit("Görüntü bulunamadı.")
     esikler = esikleri_yukle()
-    print(f"Eşikler: {esikler}  |  mod: {args.mod}  |  yöntem: {args.yontem}")
+    print(f"Eşikler: {esikler}  |  mod: {args.mod}, giriş {args.imgsz} px  |  yöntem: {args.yontem}")
 
     model = T.model_yukle()
     os.makedirs(args.cikti, exist_ok=True)
@@ -57,7 +62,7 @@ if __name__ == "__main__":
             print(f"  ! Okunamadı: {dosya} (iPhone HEIC ise JPG olarak dışa aktarın)")
             continue
         bas = time.time()
-        tespitler = T.esik_uygula(T.tespit(model, img, args.mod, 0.05, args.cihaz), esikler)
+        tespitler = T.esik_uygula(T.tespit(model, img, args.mod, 0.05, args.cihaz, imgsz=args.imgsz), esikler)
         sonuc = anonimlestir(img, tespitler, args.yontem)
         sure = (time.time() - bas) * 1000
 

@@ -16,6 +16,10 @@ Diğer modüllere verilen çıktı formatı (ekipçe ortak):
             plaka ve yüzlerde fark yaratması bekleniyor; hangisinin daha iyi olduğunu
             degerlendir.py ile ölçüyoruz.
 
+6. hafta (Ceren KILIÇ): küçük yüz denemesi için giriş boyutu (imgsz) ve parça boyutu
+(parca) parametre olarak verilebilir hâle getirildi. Varsayılanlar değişmedi (640 / 1280),
+yani mevcut sonuçlar ve diğer betikler aynen çalışır. Bkz. src/kucuk_yuz.py
+
 Deneme (proje ana klasöründeyken):
     python src/tespit.py foto.jpg
     python src/tespit.py foto.jpg --mod parcali
@@ -51,10 +55,10 @@ def model_yukle(yol=MODEL_YOLU):
 
 
 # ---------------- Modelden ham tahmin ----------------
-def ham_tahmin(model, goruntuler, esik, cihaz=None):
+def ham_tahmin(model, goruntuler, esik, cihaz=None, imgsz=IMGSZ):
     """Bir veya birden çok görüntü (BGR numpy) için her görüntüye N x 6 dizi döndürür:
     [x1, y1, x2, y2, guven, sinif_no]. Toplu (batch) çalıştırmak tek tek çalıştırmaktan hızlıdır."""
-    sonuclar = model.predict(goruntuler, imgsz=IMGSZ, conf=esik, verbose=False, device=cihaz)
+    sonuclar = model.predict(goruntuler, imgsz=imgsz, conf=esik, verbose=False, device=cihaz)
     cikti = []
     for s in sonuclar:
         b = s.boxes
@@ -83,9 +87,9 @@ def ortak_formata_cevir(dizi, isimler):
 
 
 # ---------------- İP7 / İP8 - Tam görüntü tespiti ----------------
-def tespit_et(model, goruntu, esik=0.25, cihaz=None):
+def tespit_et(model, goruntu, esik=0.25, cihaz=None, imgsz=IMGSZ):
     """4. haftadaki yöntem: görüntünün tamamı tek seferde modele verilir."""
-    return ortak_formata_cevir(ham_tahmin(model, [goruntu], esik, cihaz)[0], model.names)
+    return ortak_formata_cevir(ham_tahmin(model, [goruntu], esik, cihaz, imgsz)[0], model.names)
 
 
 # ---------------- Parçalı tespit (5. hafta) ----------------
@@ -124,21 +128,22 @@ def kutu_birlestir(dizi, iou_esigi=NMS_IOU, icerme_esigi=0.7):
     return np.array(tutulan, dtype=np.float32)
 
 
-def parcali_tespit_et(model, goruntu, esik=0.25, cihaz=None):
-    """Görüntüyü 1280 px parçalara bölüp her parçayı + tam görüntüyü tarar, sonuçları birleştirir."""
+def parcali_tespit_et(model, goruntu, esik=0.25, cihaz=None, imgsz=IMGSZ, parca=PARCA):
+    """Görüntüyü parca x parca (varsayılan 1280 px) parçalara bölüp her parçayı + tam görüntüyü
+    tarar, sonuçları birleştirir."""
     Y, G = goruntu.shape[:2]
-    xs, ys = parca_konumlari(G), parca_konumlari(Y)
+    xs, ys = parca_konumlari(G, parca), parca_konumlari(Y, parca)
     if len(xs) == 1 and len(ys) == 1:                     # görüntü zaten tek parçaya sığıyor
-        return tespit_et(model, goruntu, esik, cihaz)
+        return tespit_et(model, goruntu, esik, cihaz, imgsz)
 
     parcalar, kaydirmalar = [goruntu], [(0, 0)]            # ilk eleman: tam görüntü
     for y in ys:
         for x in xs:
-            parcalar.append(goruntu[y:y + PARCA, x:x + PARCA])
+            parcalar.append(goruntu[y:y + parca, x:x + parca])
             kaydirmalar.append((x, y))
 
     hepsi = []
-    for dizi, (dx, dy) in zip(ham_tahmin(model, parcalar, esik, cihaz), kaydirmalar):
+    for dizi, (dx, dy) in zip(ham_tahmin(model, parcalar, esik, cihaz, imgsz), kaydirmalar):
         if len(dizi):
             dizi = dizi.copy()
             dizi[:, [0, 2]] += dx                          # parça koordinatı -> görüntü koordinatı
@@ -149,11 +154,11 @@ def parcali_tespit_et(model, goruntu, esik=0.25, cihaz=None):
     return ortak_formata_cevir(kutu_birlestir(np.concatenate(hepsi)), model.names)
 
 
-def tespit(model, goruntu, mod="tam", esik=0.25, cihaz=None):
+def tespit(model, goruntu, mod="tam", esik=0.25, cihaz=None, imgsz=IMGSZ, parca=PARCA):
     """Tek giriş noktası: mod = 'tam' veya 'parcali'."""
     if mod == "parcali":
-        return parcali_tespit_et(model, goruntu, esik, cihaz)
-    return tespit_et(model, goruntu, esik, cihaz)
+        return parcali_tespit_et(model, goruntu, esik, cihaz, imgsz, parca)
+    return tespit_et(model, goruntu, esik, cihaz, imgsz)
 
 
 # ---------------- İP12 - Sınıf bazlı eşik ----------------

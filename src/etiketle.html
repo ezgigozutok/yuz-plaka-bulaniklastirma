@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>S7 Etiketleme</title>
+<!--
+  S7 (Türk plakası) etiketleme aracı - tarayıcı sürümü (Ceren KILIÇ, 6. hafta)
+
+  etiketle.py ile aynı işi yapar ve aynı formatta etiketler.json üretir. macOS + Anaconda'da
+  OpenCV penceresi klavyeden tuş alamadığı için hazırlandı. Fotoğraflar hiçbir yere
+  yüklenmez; sayfa tamamen bu bilgisayarda, tarayıcının içinde çalışır.
+
+  Kullanım:
+    1) Bu dosyayı Safari veya Chrome ile açın (Finder'da çift tıklayın).
+    2) "Fotoğrafları seç" ile data/turk_plaka/ içindeki fotoğrafları seçin.
+    3) Her nesnenin etrafına kutu çizin, bitince "etiketler.json'u indir".
+    4) İnen dosyayı data/turk_plaka/etiketler.json olarak kaydedin ve:
+         python src/etiketle.py --test-setine-ekle
+-->
+<style>
+  :root { --zemin:#f6f5f1; --kart:#fff; --yazi:#1d1d1b; --soluk:#6b6a65; --cizgi:#dcdad3;
+          --plaka:#e0302b; --yuz:#1f9e4a; --vurgu:#2a63d6; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+          --zemin:#1b1b1a; --kart:#262624; --yazi:#ecebe6; --soluk:#a3a29c; --cizgi:#3b3a37; } }
+  * { box-sizing:border-box; }
+  body { margin:0; font:14px/1.45 -apple-system, "Segoe UI", sans-serif; background:var(--zemin); color:var(--yazi); }
+  header { display:flex; flex-wrap:wrap; gap:10px; align-items:center; padding:12px 16px;
+           background:var(--kart); border-bottom:1px solid var(--cizgi); position:sticky; top:0; z-index:2; }
+  h1 { font-size:16px; margin:0 12px 0 0; }
+  button, label.dugme { font:inherit; padding:6px 12px; border-radius:8px; border:1px solid var(--cizgi);
+           background:var(--kart); color:var(--yazi); cursor:pointer; }
+  button:hover, label.dugme:hover { border-color:var(--soluk); }
+  button.ana { background:var(--vurgu); color:#fff; border-color:var(--vurgu); }
+  .sinif.secili[data-s="plaka"] { background:var(--plaka); color:#fff; border-color:var(--plaka); }
+  .sinif.secili[data-s="yuz"] { background:var(--yuz); color:#fff; border-color:var(--yuz); }
+  input[type=file] { display:none; }
+  main { display:grid; grid-template-columns:1fr 260px; gap:16px; padding:16px; }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } }
+  #sahne { overflow:auto; background:#111; border-radius:10px; max-height:calc(100vh - 150px); }
+  canvas { display:block; cursor:crosshair; }
+  aside { background:var(--kart); border:1px solid var(--cizgi); border-radius:10px; padding:14px; align-self:start; }
+  aside h2 { font-size:13px; margin:0 0 8px; color:var(--soluk); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  ul { list-style:none; margin:0 0 14px; padding:0; }
+  li { display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid var(--cizgi); }
+  li button { padding:0 8px; }
+  .nokta { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px; }
+  #bilgi { color:var(--soluk); }
+  kbd { font:12px ui-monospace, monospace; border:1px solid var(--cizgi); border-radius:4px; padding:0 4px; }
+  .bos { padding:60px 20px; text-align:center; color:#ccc; }
+</style>
+</head>
+<body>
+<header>
+  <h1>S7 Etiketleme</h1>
+  <label class="dugme ana">Fotoğrafları seç<input id="dosyalar" type="file" accept="image/*" multiple></label>
+  <label class="dugme">Önceki etiketleri yükle<input id="eski" type="file" accept=".json,application/json"></label>
+  <span style="flex:1"></span>
+  <button class="sinif secili" data-s="plaka">Plaka (P)</button>
+  <button class="sinif" data-s="yuz">Yüz (Y)</button>
+  <button id="geri">◀ Önceki (B)</button>
+  <span id="sira">0 / 0</span>
+  <button id="ileri">Sonraki (N) ▶</button>
+  <label>Yakınlık <input id="yakin" type="range" min="1" max="4" step="0.5" value="1"></label>
+  <button id="indir" class="ana">etiketler.json'u indir</button>
+</header>
+<main>
+  <div id="sahne"><div class="bos">Başlamak için <b>Fotoğrafları seç</b>'e tıklayın.</div></div>
+  <aside>
+    <h2>Bu fotoğraftaki kutular</h2>
+    <ul id="liste"></ul>
+    <h2>Durum</h2>
+    <p id="bilgi">Henüz fotoğraf yok.</p>
+    <h2>Kısayollar</h2>
+    <p>Fareyle sürükle: kutu çiz<br><kbd>P</kbd> plaka · <kbd>Y</kbd> yüz<br><kbd>Z</kbd> son kutuyu sil<br>
+       <kbd>N</kbd> / <kbd>→</kbd> sonraki · <kbd>B</kbd> / <kbd>←</kbd> önceki</p>
+    <p id="bilgi2" style="color:var(--soluk)">Uzaktaki küçük plakaları ve yüzleri de işaretleyin; yakınlık
+       çubuğuyla büyütebilirsiniz. Etiketlenmeyen nesneler, model onları bulduğunda yanlış tespit sayılır.</p>
+  </aside>
+</main>
+<script>
+(() => {
+  const RENK = { plaka: "#e0302b", yuz: "#1f9e4a" };
+  const AD = { plaka: "Plaka", yuz: "Yüz" };
+  const ANAHTAR = "s7_etiketler";
+  let dosyalar = [], i = 0, sinif = "plaka", img = null, olcek = 1, cizim = null;
+  let etiketler = {};
+  try { etiketler = JSON.parse(localStorage.getItem(ANAHTAR) || "{}"); } catch (e) { etiketler = {}; }
+
+  const $ = (s) => document.querySelector(s);
+  const sahne = $("#sahne"), liste = $("#liste");
+  const canvas = document.createElement("canvas"), ctx = canvas.getContext("2d");
+
+  function kaydetYerel() { try { localStorage.setItem(ANAHTAR, JSON.stringify(etiketler)); } catch (e) {} }
+  function kayit() {
+    const d = dosyalar[i];
+    if (!etiketler[d.name]) etiketler[d.name] = { boyut: [img.naturalWidth, img.naturalHeight], nesneler: [] };
+    return etiketler[d.name];
+  }
+
+  function sinifSec(s) {
+    sinif = s;
+    document.querySelectorAll(".sinif").forEach(b => b.classList.toggle("secili", b.dataset.s === s));
+  }
+
+  function ciz() {
+    if (!img) return;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const k = kayit();
+    ctx.lineWidth = 2;
+    k.nesneler.forEach((n, j) => {
+      const [x1, y1, x2, y2] = n.kutu.map(v => v * olcek);
+      ctx.strokeStyle = RENK[n.sinif];
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.fillStyle = RENK[n.sinif];
+      ctx.font = "bold 12px sans-serif";
+      ctx.fillText(String(j + 1), x1 + 2, Math.max(12, y1 - 3));
+    });
+    if (cizim && cizim.s) {
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = RENK[sinif];
+      ctx.strokeRect(cizim.x, cizim.y, cizim.s.x - cizim.x, cizim.s.y - cizim.y);
+      ctx.setLineDash([]);
+    }
+    liste.innerHTML = "";
+    k.nesneler.forEach((n, j) => {
+      const li = document.createElement("li");
+      const w = n.kutu[2] - n.kutu[0];
+      li.innerHTML = `<span><span class="nokta" style="background:${RENK[n.sinif]}"></span>${j + 1}. ${AD[n.sinif]} · ${w}px</span>`;
+      const sil = document.createElement("button");
+      sil.textContent = "×"; sil.title = "Sil";
+      sil.onclick = () => { k.nesneler.splice(j, 1); kaydetYerel(); ciz(); };
+      li.appendChild(sil);
+      liste.appendChild(li);
+    });
+    if (!k.nesneler.length) liste.innerHTML = "<li><span style='color:var(--soluk)'>Henüz kutu yok</span></li>";
+    durum();
+  }
+
+  function durum() {
+    const adlar = dosyalar.map(d => d.name);
+    const yapilan = adlar.filter(a => etiketler[a] && etiketler[a].nesneler.length).length;
+    let p = 0, y = 0;
+    adlar.forEach(a => (etiketler[a]?.nesneler || []).forEach(n => n.sinif === "plaka" ? p++ : y++));
+    $("#bilgi").textContent = `${adlar.length} fotoğraf · ${yapilan} tanesinde kutu var · toplam ${p} plaka, ${y} yüz`;
+    $("#sira").textContent = `${dosyalar.length ? i + 1 : 0} / ${dosyalar.length}`;
+  }
+
+  function boyutla() {
+    if (!img) return;
+    const sigan = Math.min(1, (sahne.clientWidth - 2) / img.naturalWidth);
+    olcek = sigan * parseFloat($("#yakin").value);
+    canvas.width = Math.round(img.naturalWidth * olcek);
+    canvas.height = Math.round(img.naturalHeight * olcek);
+    ciz();
+  }
+
+  function goster(n) {
+    if (!dosyalar.length) return;
+    i = Math.max(0, Math.min(dosyalar.length - 1, n));
+    const d = dosyalar[i];
+    const yeni = new Image();
+    yeni.onload = () => {
+      img = yeni;
+      sahne.innerHTML = ""; sahne.appendChild(canvas);
+      kayit(); kaydetYerel();
+      boyutla();
+      URL.revokeObjectURL(yeni.src);
+    };
+    yeni.src = URL.createObjectURL(d);
+  }
+
+  function nokta(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: Math.max(0, Math.min(canvas.width, e.clientX - r.left)), y: Math.max(0, Math.min(canvas.height, e.clientY - r.top)) };
+  }
+  canvas.addEventListener("mousedown", e => { const p = nokta(e); cizim = { x: p.x, y: p.y, s: null }; });
+  canvas.addEventListener("mousemove", e => { if (cizim) { cizim.s = nokta(e); ciz(); } });
+  window.addEventListener("mouseup", e => {
+    if (!cizim) return;
+    const s = cizim.s || { x: cizim.x, y: cizim.y };
+    const x1 = Math.min(cizim.x, s.x) / olcek, x2 = Math.max(cizim.x, s.x) / olcek;
+    const y1 = Math.min(cizim.y, s.y) / olcek, y2 = Math.max(cizim.y, s.y) / olcek;
+    cizim = null;
+    if (x2 - x1 >= 3 && y2 - y1 >= 3) {
+      kayit().nesneler.push({ sinif, kutu: [Math.round(x1), Math.round(y1), Math.round(x2), Math.round(y2)] });
+      kaydetYerel();
+    }
+    ciz();
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT" && e.target.type !== "range") return;
+    const t = e.key.toLowerCase();
+    if (t === "p") sinifSec("plaka");
+    else if (t === "y") sinifSec("yuz");
+    else if (t === "z" && img) { kayit().nesneler.pop(); kaydetYerel(); ciz(); }
+    else if (t === "n" || e.key === "ArrowRight") { goster(i + 1); e.preventDefault(); }
+    else if (t === "b" || e.key === "ArrowLeft") { goster(i - 1); e.preventDefault(); }
+  });
+
+  document.querySelectorAll(".sinif").forEach(b => b.onclick = () => sinifSec(b.dataset.s));
+  $("#geri").onclick = () => goster(i - 1);
+  $("#ileri").onclick = () => goster(i + 1);
+  $("#yakin").oninput = boyutla;
+  window.addEventListener("resize", boyutla);
+
+  $("#dosyalar").onchange = e => {
+    dosyalar = [...e.target.files].filter(f => /\.(jpe?g|png)$/i.test(f.name)).sort((a, b) => a.name.localeCompare(b.name));
+    const atlanan = e.target.files.length - dosyalar.length;
+    if (atlanan) alert(`${atlanan} dosya atlandı (yalnızca JPG ve PNG). iPhone HEIC fotoğraflarını önce JPG'ye çevirin.`);
+    goster(0);
+  };
+  $("#eski").onchange = async e => {
+    const f = e.target.files[0]; if (!f) return;
+    try { Object.assign(etiketler, JSON.parse(await f.text())); kaydetYerel(); ciz(); durum(); }
+    catch (err) { alert("Dosya okunamadı: " + err.message); }
+  };
+  $("#indir").onclick = () => {
+    const adlar = new Set(dosyalar.map(d => d.name));
+    const cikti = {};
+    Object.keys(etiketler).sort().forEach(a => { if (!adlar.size || adlar.has(a)) cikti[a] = etiketler[a]; });
+    const blob = new Blob([JSON.stringify(cikti, null, 1)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "etiketler.json"; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+})();
+</script>
+</body>
+</html>

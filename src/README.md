@@ -11,5 +11,9 @@
 | `bulaniklastir.py` | İP10, İP11 | Tespit edilen bölgeleri Gaussian veya piksel yöntemiyle bulanıklaştırır |
 | `anonimlestir.py` | İP16 | Uçtan uca prototip: görüntü → tespit → bulanıklaştırma → çıktı |
 | `ortak.py` | – | Ortak yollar, test seti okuma, IoU |
+| `fp_incele.py` | İP14 | Yanlış tespitleri (varsayılan S9) tek tek gösterir; gerçek nesne / model hatası diye işaretlenir |
+| `kucuk_yuz.py` | İP14 | Küçük yüzler için farklı giriş ve parça boyutlarını test setinde karşılaştırır |
+| `etiketle.html` | İP3 (S7) | `etiketle.py`'nin tarayıcı sürümü (macOS + Anaconda'da OpenCV penceresi tuş almadığı için). Aynı `etiketler.json` formatını üretir |
+| `bulanik_karsilastir.py` | İP10, İP13 | Gaussian ve pikselleştirmeyi farklı güç ve nesne boyutlarında karşılaştırır (yeniden tespit oranı + örnek görseller) |
 
 Ortak tespit formatı: `{"sinif": "yuz" | "plaka", "kutu": [x1, y1, x2, y2], "guven": 0–1}`
